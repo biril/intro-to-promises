@@ -1,0 +1,778 @@
+<!doctype html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+		<title>Modest Client UI</title>
+
+		<link rel="stylesheet" href="css/reveal.css">
+		<link rel="stylesheet" href="css/theme/black.css">
+
+		<!-- Theme used for syntax highlighting of code -->
+		<link rel="stylesheet" href="lib/css/zenburn.css">
+
+		<!-- Printing and PDF exports -->
+		<script>
+			var link = document.createElement( 'link' );
+			link.rel = 'stylesheet';
+			link.type = 'text/css';
+			link.href = window.location.search.match( /print-pdf/gi ) ? 'css/print/pdf.css' : 'css/print/paper.css';
+			document.getElementsByTagName( 'head' )[0].appendChild( link );
+		</script>
+
+		<style type="text/css">
+			h4 {text-transform: none !important;}
+			.smaller {font-size: 70% !important;}
+		</style>
+	</head>
+	<body>
+		<div class="reveal">
+			<div class="slides">
+
+				<!-- Section 1: Define Continuation Passing Style -->
+				<section>
+					<section>
+						<h4>&#9758; Continuations</h4>
+					</section>
+					<section>
+						<p>Direct style <a href="https://en.wikipedia.org/wiki/Direct_style">&#128279;</a></p>
+						<pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+var firstUser = getUser({id: 1});
+ui.renderUser(firstUser);
+						</code></pre>
+						<p>Continuation passing style <a href="https://en.wikipedia.org/wiki/Continuation-passing_style">&#128279;</a></p>
+
+						<pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+getUser({id: 1}, function(firstUser) {
+  ui.renderUser(firstUser);
+});
+						</code></pre>
+						<p class="smaller">
+							The function written in CPS receives the 'continuation' as an extra
+							argument. When the CPS function has computed its result value, it
+							"returns" it by calling the continuation function with this value as
+							the argument.
+						</p>
+					</section>
+					<section>
+						<p>async CPS: Very common in JS</p>
+						<pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+runAsyncTask(taskInput, function(taskOutput) {
+  console.log("task finished with output " + taskOutput);
+});
+						</code></pre>
+					</section>
+					<section>
+						<p>Not all callbacks qualify as continuations</p>
+						<pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+// This is pub-sub, not continuation passing
+$('.someButton').on('mouseover', function() {
+  tooltip.show();
+});
+						</code></pre>
+					</section>
+				</section>
+
+				<!-- Section 2: Motivation -->
+				<section>
+					<h4>&#9735; Motivation</h4>
+					<ul>
+						<li>
+							A better alternative to async continuation passing.
+							<span class="smaller">(Cause async CPS is actually pretty bad)</span>
+						</li>
+						<li class="fragment">
+							A way to regain useful control flow patterns only applicable to the
+							direct (synchronous) style.
+							<span class="smaller">(Cause we can't use them, with async CPS)</span>
+						</li>
+					</ul>
+				</section>
+
+				<!-- Section 3: Enter the promise -->
+				<section>
+					<section>
+						<h4>&#128161; Promise</h4>
+						<p>
+							A proxy for a value that will become available <strong>in the future</strong>.
+						</p>
+						<p class="fragment smaller">
+							(or that is <em>already</em> available. Or that will <em>never</em> be available. (edge cases))
+						</p>
+					</section>
+					<section>
+						<p>Here's a promise for a user</p>
+						<pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+var userPromise = $.get('http://api/users/1'); // jQuery 3.0, please
+						</code></pre>
+						<p class="fragment">This promise is <em>pending</em>.</p>
+					</section>
+					<section>
+						<p>A user-promise is not a user</p>
+						<pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+// Let's assume user objects look like {id: '..', name: '..', email: '..'}.
+
+// This is an error
+console.log(userPromise.name); // No 'name' attribute on userPromise object
+						</code></pre>
+						<p class="fragment">So what can we do with it?</p>
+					</section>
+					<section>
+						<p>A <em>pending</em> promise will eventually be <em>fulfilled</em> with a value.</p>
+						<div class="fragment">
+							<p class="smaller">So what we can do is specify what should happen when it's fulfilled:</p>
+							<pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+userPromise.then(function(user) {
+  ui.renderUser(user);
+});
+							</code></pre>
+						</div>
+					</section>
+					<section>
+						<p>
+							Commonly, <span class="smaller">we omit the promise object and chain
+							<strong>then</strong> directly onto the initial promise-returning
+							function call</span>
+						</p>
+						<pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+$.get('http://api/users/1').then(function(user) {
+  ui.renderUser(user);
+});
+						</code></pre>
+					</section>
+					<section>
+						<p>Here's another example.</p>
+						<p class="smaller">Assume wait() is a promise-returning function</p>
+						<pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+wait(60000).then(function() {
+  alert("BOO!");
+});
+						</code></pre>
+					</section>
+					<section>
+						<p>Note: Fullfilment handlers will run even if the promise is <em>already fulfilled</em></p>
+						<pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+var timeoutPromise = wait(60000);
+
+timeoutPromise.then(function() {
+  console.log('BOO');
+  timeoutPromise.then(function() {
+    console.log('HOO');
+  });
+});
+
+// This will log 'BOO' and then 'HOO'
+						</code></pre>
+					</section>
+				</section>
+
+				<!-- Section 4: Just a glorified continuation? -->
+				<section>
+					<section>
+						<h4>Just a glorified continuation?</h4>
+						<p>How is this better than async continuation passing?</p>
+                        <pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+// Async CPS
+runAsyncTask(taskInput, function(taskOutput) {
+  console.log("task finished with output " + taskOutput);
+});
+
+// vs
+
+// Promise
+runAsyncTask(taskInput).then(function(taskOutput) {
+  console.log("task finished with output " + taskOutput);
+});
+                        </code></pre>
+					</section>
+
+					<!-- 4.1 -->
+					<section>
+						<p>&#128078; Callback APIs are inconsistent</p>
+						<pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+$.ajax({
+  url: 'http://..',
+  success: function(data, textStatus, jqXhr) {/* use data */},
+  error: function(jqXHR, textStatus, errorThrown) {/* handle error */}
+});
+
+http.request('http://..', function(error, response) {
+  if (error) {/* handle error */}
+  /* handle response (no error) */
+});
+
+require(['jquery', 'underscore'],
+  function($, _) {/* make use of $ and _ */},
+  function(error) {/* handle error */}
+);
+						</code></pre>
+					</section>
+					<section>
+						<p>&#128077; Promise API</p>
+						<pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+runAsyncTask(taskInput).then(function(taskOutput) {
+  // Task output = promise's fulfillment value
+});
+						</code></pre>
+						<pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+$.ajax({url: 'http://..'}).then(function(data) {
+  // use data
+});
+
+http.request('http://..').then(function(response) {
+  // handle response
+});
+
+require(['jquery', 'underscore']).then(function(deps) {
+  // make use of deps.$ and deps._
+						</code></pre>
+						<p class="fragment smaller">(We'll talk about errors in a bit ..)</p>
+					</section>
+
+					<!-- 4.2 -->
+					<section>
+						<p>&#128078; Trust issue: No guarantee that callbacks will be treated as continuation</p>
+						<p class="smaller">
+							'3rd party' code may 'choose' to invoke given callback multiple times.
+							Or invoke the error callback <em>and</em> the success callback. Both
+							very popular JS bugs.
+							(<a href="http://joseoncode.com/2013/12/27/case-of-double-callbacks/">node example</a>).
+						</p>
+					</section>
+					<section>
+						<p>&#128077; Promise guarantee:</p>
+						<p>
+							When <em>fulfilled</em>, a promise:
+							<ul>
+								<li>must not transition to any other state.</li>
+								<li>must have a value, which must not change.</li>
+							</ul>
+						</p>
+						<p class="smaller">(Taken from <a href="https://promisesaplus.com/#point-14">the spec</a>.)</p>
+					</section>
+
+					<!-- 4.3 -->
+					<section>
+						<p>&#128078; Trust issue: No guarantee that continuations will be invoked synchronously/asynchronously</p>
+					</section>
+
+					<section>
+						<p>Massively popular <a href="https://stackoverflow.com/questions/14220321/how-do-i-return-the-response-from-an-asynchronous-call">Stack Overflow question</a>:</p>
+						<p class="smaller">
+							I tried to return the value from the success callback as well as assigning the response to a
+							local variable inside the function and return that one, but none of those ways actually
+							return the response.
+						</p>
+						<pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+function foo() {
+  var result;
+
+  $.ajax({
+    url: '...',
+    success: function(response) {
+      result = response;
+      // return response; // <- I tried that one as well
+    }
+  });
+
+  return result;
+}
+
+var result = foo(); // It always ends up being `undefined`.
+						</code></pre>
+					</section>
+
+					<section>
+						<p>But what if we had this instead?</p>
+						<pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+function foo() {
+  var result;
+
+  getData(options, function(data) {
+    result = data;
+  });
+
+  return result;
+}
+
+var result = foo(); // Now, does this work?
+						</code></pre>
+						<p class="fragment smaller">
+							Isaac Z. Schlueter, the node / npm guy has written many
+							<a href="http://blog.izs.me/post/59142742143/designing-apis-for-asynchrony">wize words</a>
+							on this.
+						</p>
+					</section>
+					<section>
+						<p>&#128077; Promise guarantee:</p>
+						<p>
+							A fulfillment handler must not be called until the execution context
+							stack contains only platform code.
+						</p>
+						<p class="fragment">I.e. it must be called asynchronously</p>
+						<p class="smaller">(Taken from <a href="https://promisesaplus.com/#point-34">the spec</a>.)</p>
+					</section>
+                    <section>
+                        <p>
+                            <a href="https://github.com/getify/You-Dont-Know-JS/tree/master/async%20&%20performance">
+                                'You Don't Know JS: Async &amp; Performance'
+                            </a> has an
+                            <a href="https://github.com/getify/You-Dont-Know-JS/blob/master/async%20%26%20performance/ch2.md">
+                                entire chapter
+                            </a> dissing callbacks.</p>
+                    </section>
+				</section>
+
+				<!-- Section 5: Chaining & Transforming Promises -->
+				<section>
+					<section>
+						<h4>Just an incremental improvement on continuations?</h4>
+						<div class="fragment ">
+							<p>Nope</p>
+							<blockquote class="smaller">
+								Promises offer a way to regain useful control flow patterns
+								only applicable to the direct (synchronous) style.
+							</blockquote>
+						</div>
+					</section>
+					<section>
+						<p>Promise chaining &amp; transformations</p>
+						<pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+$.get('http://api/users/1')
+  .then(function(user) {
+    ui.renderUser(user);
+  })
+  .then(function() {
+    return wait(1000);
+  })
+  .then(function() {
+    ui.renderMessage("You can now edit the user");
+  });
+						</code></pre>
+						<p class="fragment smaller">This works because <code>.then(..)</code> always returns a promise.</p>
+					</section>
+					<section>
+						<p>How does chaining work, <em>exactly</em>?</p>
+						<p>A fullfilment handler may return a value that</p>
+						<p class="smaller">is not a promise</p>
+						<pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+$.get('http://api/users/1').then(function(user) {
+  return user.name;
+});
+						</code></pre>
+						<p class="smaller">or is a promise</p>
+						<pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+$.get('http://api/users/1').then(function(user) {
+  return $.get('http://api/organizations/' + user.organization);
+});
+						</code></pre>
+					</section>
+					<section>
+						<p>Fullfilment handler returns value that isn't promise</p>
+						<p class="smaller">Then <code>promise</code> gets <em>fulfilled</em> with that value</p>
+						<pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+// promise p will be fulfilled with the user name
+//  at the time that the _original promise_ (the user promise) is fulfilled
+var p = $.get('http://api/users/1').then(function(user) {
+  return user.name;
+});
+						</code></pre>
+					</section>
+					<section>
+						<p>Fullfilment handler returns a promise</p>
+						<p class="smaller">Then <code>promise</code> adopts the state of (effectively <em>becomes</em>) the returned promise</p>
+						<pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+// promise p will be fulfilled with the user organization
+//  at the time that the last API call completes
+var p = $.get('http://api/users/1').then(function(user) {
+  return $.get('http://api/organizations/' + user.organizationId);
+});
+						</code></pre>
+					</section>
+					<section>
+						<p>Let's decompose the original example</p>
+						<pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+var userPromise = $.get('http://api/users/1');
+
+var postRenderPromise = userPromise.then(function(user) {
+  ui.renderUser(user);
+  // Implicitly returns undefined. So postRenderPromise is fulfilled
+  //  with undefined 'immediately after' userPromise is fulfilled
+});
+
+var pausePromise = postRenderPromise.then(function() {
+  return wait(1000);
+  // Returns the promise that wait returns. So pausePromise is pending
+  //  and will be fulfilled '1s after' postRenderPromise
+})
+
+var endPromise = pausePromise.then(function() {
+  ui.renderMessage("You can now edit the user");
+  // Implicitly returns undefined. So endPromise is fulfilled
+  //  with undefined 'immediately after' pausePromise is fulfilled
+});
+						</code></pre>
+					</section>
+				</section>
+
+				<!-- Section 6: CPS -> (promises) -> 'DS', pt 01: Executing tasks, sequentially -->
+				<section>
+                    <section>
+                        <p class="smaller">CPS → (promises) → 'DS', pt 01:</p>
+                        <h4>Executing tasks, sequentially</h4>
+                    </section>
+					<section>
+						<p>Executing async tasks sequentially, in CPS</p>
+						<p class="smaller">AKA the <a href="https://en.wikipedia.org/wiki/Pyramid_of_doom_(programming)">pyramid of doom</a></p>
+						<pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+// Get the admin of the organization that the 'first user' belongs to
+var admin;
+getUserById(1, function(user) {
+  getOrgById(user.orgId, function(org) {
+    getUserById(org.adminId, function(adminUser) {
+      admin = adminUser;
+    });
+  });
+});
+						</code></pre>
+					</section>
+					<section>
+						<p>Executing <span style="text-decoration:line-through;">async</span> tasks sequentially, in DS</p>
+						<pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+var user = getUserById(1);
+var org = getOrgById(user.orgId);
+var admin = getUserById(org.adminId);
+						</code></pre>
+					</section>
+					<section>
+						<p>Executing async tasks sequentially with promises</p>
+						<pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+var user = getUserById(1);
+var org = user.then(function(user) {return getOrgById(user.orgId);});
+var admin = org.then(function(org) {return getUserById(org.adminId);});
+						</code></pre>
+					</section>
+					<section>
+						<p class="smaller">(This is more common though:)</p>
+						<pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+var adminPromise = getUserById(1)
+  .then(function(user) {
+    return getOrgById(user.orgId);
+  })
+  .then(function(org) {
+    return getUserById(org.adminId);
+  });
+						</code></pre>
+					</section>
+				</section>
+
+				<!-- Section 6.5: Bonus: parallel tasks
+				<section>
+					<p>Executing async tasks in parallel</p>
+					<pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+// Show the current weather,
+//  pulling data from a number of available services
+var googleWeather, bbcWeather, metcheckWeather;
+
+getWeather('google', function(weather) {
+  googleWeather = weather;
+  renderWeatherIfDone();
+});
+getWeather('bbc', function(weather) {
+  bbcWeather = weather;
+  renderWeatherIfDone();
+});
+getWeather('metcheck', function(weather) {
+  metcheckWeather = weather;
+  renderWeatherIfDone();
+});
+
+var renderWeatherIfDone = function() {
+  if (googleWeather && bbcWeather && metcheckWeather) {
+    ui.renderWeather(googleWeather, bbcWeather, metcheckWeather);
+  }
+};
+					</code></pre>
+				</section>
+				-->
+
+				<!-- Section 7: CPS -> (promises) -> 'DS', pt 02: Error handling -->
+				<section>
+                    <section>
+                        <h4>Async continuations &amp; Error handling (exceptions)</h4>
+                        <p class="smaller">(TL;DR: I doesn't work)</p>
+					</section>
+
+					<section>
+						<p>Error handling, in DS</p>
+						<pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+var admin;
+
+try {
+  var user = getUserById(1);
+  var org = getOrgById(user.orgId);
+  admin = getUserById(org.adminId);
+} catch (exception) {
+  ui.renderError(exception);
+  return;
+}
+
+// Continue with happy path, make use of admin reference
+						</code></pre>
+					</section>
+					<section>
+						<p>Async CPS version. Wouldn't it be nice if</p>
+						<pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+var admin;
+try {
+  getUserById(1, function(user) {
+    getOrgById(user.orgId, function(org) {
+      getUserById(org.adminId, function(adminUser) {
+        admin = adminUser;
+      });
+    });
+  });
+} catch (exception) {
+  ui.renderError(exception);
+  return;
+}
+
+// Continue with happy path, make use of admin reference
+						</code></pre>
+						<p class="fragment smaller">
+							sadly, this doesn't work due to the continuations executing (and the
+							exceptions being thrown) within call stacks that aren't the original
+							catch-block-containing call stack.
+						</p>
+					</section>
+					<section>
+						<p>So we have to do this instead</p>
+						<pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+var admin;
+try {
+  getUserById(1, function(user) {
+    try {
+      getOrgById(user.orgId, function(org) {
+        try {
+          getUserById(org.adminId, function(adminUser) {
+            admin = adminUser;
+          });
+        } catch (exception) {
+          ui.renderError(exception);
+        }
+      });
+    } catch (exception) {
+      ui.renderError(exception);
+    }
+  });
+} catch (exception) {
+  ui.renderError(exception);
+  return;
+}
+						</code></pre>
+						<p class="fragment"> :( </p>
+					</section>
+                </section>
+
+                <!-- Section 8: Promises & error handling -->
+                <section>
+                    <section>
+                        <h4>Promises &amp; Error handling (exceptions)</h4>
+                    </section>
+                    <section>
+                        <p class="smaller">So how do promises facilitate error handling? We've already seen how</p>
+                        <p>A <em>pending</em> promise will eventually be <em>fulfilled</em> with a value.</p>
+                        <p>Well ..</p>
+                    </section>
+                    <section>
+                        <p class="smaller"><span style="text-decoration:line-through;">A <em>pending</em> promise will eventually be <em>fulfilled</em> with a value.</span></p>
+                        <p>A <em>pending</em> promise will either</p>
+                        <ul>
+                            <li>be <em>fulfilled</em> with a value. Or</li>
+                            <li>be <em>rejected</em> with a reason.</li>
+                        </ul>
+                        <p class="fragment smaller">(or remain <em>pending</em> forever - not interesting)</p>
+                    </section>
+                    <section>
+                        <p>Enter the 'rejection handler'</p>
+                        <pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+userPromise.then(function(user) { // Both fulfillment &amp; rejection handlers
+  ui.renderUser(user);
+}, function(error) {
+  ui.renderError(error);
+});
+                        </code></pre>
+                        <pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+userPromise.then(null, function(error) { // No fulfillment handler
+  ui.renderError(error);
+});
+                        </code></pre>
+                    </section>
+                    <section>
+                        <p>Chaining &amp; transformations, revisited</p>
+                        <pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+var transformedPromise = originalPromise.then(fulHanlder, rejHandler);
+                        </code></pre>
+                        <ul>
+                            <li class="smaller">
+                                If the invoked handler returns a value <code>transformedPromise</code>
+                                gets <em>resolved</em> with that value: It's either <em>fulfilled</em>
+                                with a returned non-promise value or adopts the state of a returned promise.
+                            </li>
+                            <li class="smaller">
+                                If the invoked handler throws an exception, <code>transformedPromise</code>
+                                is <em>rejected</em> with that exception (as the <em>reason</em>).
+                            </li>
+                        </ul>
+                    </section>
+                    <section>
+                        <p>For example</p>
+                        <pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+$.get('http://api/users/1')
+  .then(function(user) {
+    if (user.name !== 'root') {
+      throw new Error('Unexpected non-root user');
+    }
+    ui.renderUser(user);
+  })
+  .then(function() {
+    return wait(1000);
+  })
+  .then(function() {
+    ui.renderMessage("You can now edit the user");
+  })
+  .then(null, function(error) {
+    ui.renderError(error);
+  });
+                        </code></pre>
+                    </section>
+                    <section>
+                        <p>Beware!</p>
+                        <pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+$.get('http://api/users/1')
+  .then(function(user) {
+    if (user.name !== 'root') {
+      throw new Error('Unexpected non-root user');
+    }
+    ui.renderUser(user);
+  }, function(error) {
+    // This rejection handler is called if the $.get promise
+    //  is rejected. But is _not_ called for the unexpected-user error
+  })
+  .then(null, function(error) {
+    // This rejection handler is called for _any_ error
+  });
+                        </code></pre>
+                    </section>
+				</section>
+
+                <!-- Section 9: CPS -> (promises) -> 'DS', pt 02: Error handling -->
+                <section>
+                    <section>
+                        <p class="smaller">CPS → (promises) → 'DS', pt 02:</p>
+                        <h4>Executing tasks, sequentially, <em>with error handling</em></h4>
+                    </section>
+                    <section>
+                        <p class="smaller">We've already seen (no error handling here):</p>
+                        <pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+var user = getUserById(1);
+var org = getOrgById(user.orgId);
+var admin = getUserById(org.adminId);
+                        </code></pre>
+                        <pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+var user = getUserById(1);
+var org = user.then(function(user) {return getOrgById(user.orgId);});
+var admin = org.then(function(org) {return getUserById(org.adminId);});
+                        </code></pre>
+                    </section>
+                    <section>
+                        <p class="smaller"><em>with</em> error handling</p>
+                        <pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+var admin;
+
+try {
+  var user = getUserById(1);
+  var org = getOrgById(user.orgId);
+  admin = getUserById(org.adminId);
+} catch (exception) {
+  ui.renderError(exception);
+  return;
+}
+
+// Continue with happy path, make use of admin reference
+                        </code></pre>
+                        <pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+var user = getUserById(1);
+var org = user.then(function(user) {return getOrgById(user.orgId);});
+var admin = org.then(function(org) {return getUserById(org.adminId);});
+
+admin.then(function(admin) {
+    // Continue with happy path, make use of admin reference
+}, function(error) {
+    ui.renderError(exception);
+})
+                        </code></pre>
+                    </section>
+                </section>
+
+                <section>
+                    <h4>Bonus Material (TODO)</h4>
+                    <ul>
+                        <li>
+                            <p>Creating promises in Q, Bluebird, ES6</p>
+                            <ul>
+                                <li>Implementing wait()</li>
+                                <li>Implementing a formSubmittedPromise</li>
+                            </ul>
+                        </li>
+                        <li>Syntax improvements with .bind()</li>
+                        <li>Exception gotchas - the .done() function</li>
+                        <li>How to 'fix' jQ < 3 (non-conformant in general) promises</li>
+                        <li>Executing tasks in parallel (the .all() (&amp; the .any() function))</li>
+                        <li>
+                            <p>Call stacks</p>
+                            <ul>
+                                <li>Why does exception handling not work in async contexts</li>
+                                <li>The promise guarantee '.. execution context stack contains only platform code'</li>
+                            </ul>
+                        </li>
+                        <li>Long stack traces for debugging</li>
+                    </ul>
+                </section>
+
+				<!-- Section 11: Where to go from here -->
+				<section>
+					<p>Where to go from here</p>
+					<ul>
+						<li>the spec, <a href="https://promisesaplus.com/">promises/A+</a></li>
+						<li>conformant <a href="https://promisesaplus.com/implementations">A+ implementations</a></li>
+						<li>Interesting implementations: <a href="https://github.com/kriskowal/q">Q</a>, <a href="http://bluebirdjs.com/docs/getting-started.html">Bluebird</a>, <a href="https://tc39.github.io/ecma262/#sec-promise-objects">ES6</a></li>
+                        <li>@domenic's <a href="https://blog.domenic.me/youre-missing-the-point-of-promises/">You're missing the point of promisses</a></li>
+                        <li>@domenic's <a href="https://www.youtube.com/watch?v=MNxnHbyzhuo">Promises, Promises</a> talk</li>
+                        <li>@spion's <a href="https://spion.github.io/posts/why-i-am-switching-to-promises.html">Why I am switching to promises</a></li>
+                        <li>You Don't Know JS: <a href="https://github.com/getify/You-Dont-Know-JS/tree/master/async%20&%20performance">Async &amp; Performance</a>
+					</ul>
+				</section>
+			</div>
+		</div>
+
+		<script src="lib/js/head.min.js"></script>
+		<script src="js/reveal.js"></script>
+
+		<script>
+			// More info https://github.com/hakimel/reveal.js#configuration
+			Reveal.initialize({
+				history: true,
+
+				// More info https://github.com/hakimel/reveal.js#dependencies
+				dependencies: [
+					{ src: 'plugin/markdown/marked.js' },
+					{ src: 'plugin/markdown/markdown.js' },
+					{ src: 'plugin/notes/notes.js', async: true },
+					{ src: 'plugin/highlight/highlight.js', async: true, callback: function() { hljs.initHighlightingOnLoad(); } }
+				]
+			});
+		</script>
+	</body>
+</html>
