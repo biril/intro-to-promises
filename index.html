@@ -1,0 +1,262 @@
+<!doctype html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+		<title>Modest Client UI</title>
+
+		<link rel="stylesheet" href="css/reveal.css">
+		<link rel="stylesheet" href="css/theme/black.css">
+
+		<!-- Theme used for syntax highlighting of code -->
+		<link rel="stylesheet" href="lib/css/zenburn.css">
+
+		<!-- Printing and PDF exports -->
+		<script>
+			var link = document.createElement( 'link' );
+			link.rel = 'stylesheet';
+			link.type = 'text/css';
+			link.href = window.location.search.match( /print-pdf/gi ) ? 'css/print/pdf.css' : 'css/print/paper.css';
+			document.getElementsByTagName( 'head' )[0].appendChild( link );
+		</script>
+
+		<style type="text/css">
+			.smaller {font-size: 70% !important;}
+		</style>
+	</head>
+	<body>
+		<div class="reveal">
+			<div class="slides">
+
+			<!-- Section 1: Define Continuation Passing Style -->
+				<section>
+					<section>
+						<p>&#9758; Continuation passing style</p>
+					</section>
+					<section>
+						<p>
+							In the <a href="https://en.wikipedia.org/wiki/Continuation-passing_style">
+							continuation passing style</a> of programming, control (i.e. 'the code to
+							execute next') is given explicitly in the form of a 'continuation' - a
+							function. This is contrasted with the more common
+							<a href="https://en.wikipedia.org/wiki/Direct_style">direct style</a>.
+						</p>
+					</section>
+					<section>
+						<p>Direct style</p>
+						<pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+var firstUser = getUser({id: 1});
+ui.renderUser(firstUser);
+						</code></pre>
+						<p>Continuation passing style</p>
+
+						<pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+getUser({id: 1}, function(firstUser) {
+  ui.renderUser(firstUser);
+});
+						</code></pre>
+						<p class="smaller">
+							The function written in CPS receives the continuation as an extra
+							argument. When the CPS function has computed its result value, it
+							"returns" it by calling the continuation function with this value as
+							the argument.
+						</p>
+					</section>
+					<section>
+						<p>async CPS is super popular in Javascript</p>
+						<pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+setTimeout(function() {
+  alert("BOO!");
+}, 60000);
+						</code></pre>
+						<pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+// Same thing, reads better
+wait(60000, function() {
+  alert("BOO!");
+});
+						</code></pre>
+					</section>
+					<section>
+						<p>Not all callbacks qualify as continuations</p>
+						<pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+$('.someButton').on('mouseover', function() {
+  // Show a tooltip or something
+});
+						</code></pre>
+					</section>
+				</section>
+
+				<!-- Section 2: Demonstrate async CPS sucks -->
+				<section>
+					<section>
+						<p>async CPS is bad &#128561;</p>
+					</section>
+					<section>
+						<p>Callback APIs are inconsistent</p>
+						<pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+$.ajax({
+  url: 'http://..',
+  success: function(data, textStatus, jqXhr) {/*..*/},
+  error: function(jqXHR, textStatus, errorThrown) {/*..*/}
+});
+
+http.request('http://..', function(error, response) {
+  if (error) {
+    /* handle error */
+  }
+  /* handle response */
+});
+
+require(['jquery'], function($) {/*..*/}, function(error) {/*..*/});
+						</code></pre>
+					</section>
+					<section>
+						<p>Please treat my callback as a continuation!</p>
+						<p class="smaller">I.e. don't call back my callback <em>twice</em></p>
+						<pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+// Here's an async task that reads a file and then runs given callback
+var runAsyncTask = function(callback) {
+  fs.readFile('file.txt', 'utf-8', function (error, data) {
+    if (error) {
+      callback(err); // Invoke with error param, since an error did occur
+    }
+    callback(null, data); // No error, just pass file contents to callback
+  });
+};
+
+runAsyncTask(sendEmail); // Run the task and then notify user by email
+						</code></pre>
+					</section>
+					<section>
+						<p>Zalgo</p>
+					</section>
+					<section>
+						<p>Running async tasks sequentially</p>
+						<p class="smaller">AKA the pyramid of doom</p>
+						<pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+// Show a list of documents owned by the admin
+//  of the current user's organization
+getOrganizationForUser(currentUser, function(organization) {
+  getAdminForOrganization(organization, function(admin) {
+    getDocumentsOfUser(admin, function(documents) {
+      ui.renderDocuments(documents);
+    });
+  });
+});
+						</code></pre>
+					</section>
+					<section>
+						<p>Running async tasks in parallel</p>
+						<pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+// Show the current weather,
+//  pulling data from a number of available services
+var googleWeather, bbcWeather, metcheckWeather;
+
+getWeather('google', function(weather) {
+  googleWeather = weather;
+  renderWeatherIfDone();
+});
+getWeather('bbc', function(weather) {
+  bbcWeather = weather;
+  renderWeatherIfDone();
+});
+getWeather('metcheck', function(weather) {
+  metcheckWeather = weather;
+  renderWeatherIfDone();
+});
+
+var renderWeatherIfDone = function() {
+  if (googleWeather && bbcWeather && metcheckWeather) {
+    ui.renderWeather(googleWeather, bbcWeather, metcheckWeather);
+  }
+};
+						</code></pre>
+					</section>
+				</section>
+
+				<!-- Section 3: Enter the Promise -->
+				<section>
+					<section>
+						<h4>&#128161; Promise</h4>
+						<p>An abstraction, useful in async execution contexts, <span class="smaller">that is</span></p>
+						<ul class="smaller">
+							<li>
+								A better alternative to async continuation passing
+							</li>
+							<li>
+								A way to make use of control flow patterns traditionaly only applicable to
+								the direct (synchronous) style, in environments where execution is
+								<em>asynchronous</em>
+							</li>
+						</ul>
+					</section>
+					<section>
+						<p>
+							A Promise represents (is a proxy for) a value which may be available now,
+							or <strong>in the future</strong>, or never.
+						</p>
+					</section>
+					<section>
+						<p>A promise usually starts out <em>pending</em>.</p>
+						<p class="smaller">Here's a <em>pending</em> promise for a user</p>
+						<pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+var userPromise = $.get('http://api/users/1'); // jQuery 3.0, please
+						</code></pre>
+					</section>
+					<section>
+						<p>A user-promise is not a user</p>
+						<pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+// Let's assume user objects look like {id: '..', name: '..', email: '..'}.
+
+// This is an error
+console.log(userPromise.name); // No 'name' attribute on userPromise object
+						</code></pre>
+					</section>
+					<section>
+						<p>
+							A <em>pending</em> promise is eventually <em>fulfilled</em> with a value.
+							When that happens, <strong>then</strong> we can use the value:
+						</p>
+						<pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+userPromise.then(function(user) {
+  ui.renderUser(user);
+});
+						</code></pre>
+					</section>
+					<section>
+						<p>More often
+						<p class="smaller">
+							we ommit the promise object and 'attach' <strong>then</strong> directly
+							onto the initial promise-returning function-call
+						</p>
+						<pre><code class="javascript" data-trim contenteditable style="font-size: 18px;">
+$.get('http://api/users/1').then(function(user) {
+  ui.renderUser(user);
+});
+						</code></pre>
+					</section>
+				</section>
+
+			</div>
+		</div>
+
+		<script src="lib/js/head.min.js"></script>
+		<script src="js/reveal.js"></script>
+
+		<script>
+			// More info https://github.com/hakimel/reveal.js#configuration
+			Reveal.initialize({
+				history: true,
+
+				// More info https://github.com/hakimel/reveal.js#dependencies
+				dependencies: [
+					{ src: 'plugin/markdown/marked.js' },
+					{ src: 'plugin/markdown/markdown.js' },
+					{ src: 'plugin/notes/notes.js', async: true },
+					{ src: 'plugin/highlight/highlight.js', async: true, callback: function() { hljs.initHighlightingOnLoad(); } }
+				]
+			});
+		</script>
+	</body>
+</html>
