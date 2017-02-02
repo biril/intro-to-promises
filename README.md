@@ -1,10 +1,7 @@
 # Intro to Promises
 
-Presentation made with [reveal.js](https://github.com/hakimel/reveal.js).
-
-Open `./index.html` to view. (`grunt serve --port <your-favourite-local-port>` for the fancier
-reveal.js features such as live reload while editing).
+[**View presentation**](https://biril.github.io/intro-to-promises).
 
 ----
 
-Licensed and freely distributed under the MIT License (LICENSE.txt).
+Made with [reveal.js](https://github.com/hakimel/reveal.js). Licensed and freely distributed under the MIT License (LICENSE.txt).
